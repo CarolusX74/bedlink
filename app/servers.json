@@ -1,0 +1,7 @@
+[
+  { "name": "Mundo Pensa (WAN)", "address": "minecraft.pensa.ar:19232" },
+  { "name": "Mundo Pensa (LAN)", "address": "core.pensa.lan:19232" },
+  { "name": "Papá y Mario (WAN)", "address": "realm.pensa.ar:19233" },
+  { "name": "Papá y Mario (LAN)", "address": "core.pensa.lan:19233" }
+
+]

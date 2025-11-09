@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# FastAPI / Uvicorn
+*.pid
+
+# Docker
+*.tar
+*.env
+.env
+*.bak
+*.swp
+
+# Local state
+app/targets.json
+
+# IDEs
+.vscode/
+.idea/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
