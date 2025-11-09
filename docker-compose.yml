@@ -4,24 +4,19 @@ services:
     build: .
     restart: unless-stopped
     ports:
-      - "19132:19132/udp"   # Discovery + Proxy UDP
-      - "19132:19132/tcp"   # Compat (no se usa)
-      - "8090:8090/tcp"     # Panel /servers, /select, /status
+      - "19132:19132/udp"
+      - "19132:19132/tcp"
+      - "8090:8090/tcp"
     environment:
       - BEDLINK_MOTD=BedLink 🌍 PensaRealms
       - BEDROCK_VERSION=1.21.50
       - BEDROCK_PROTOCOL=475
-      # 👇 Publicación correcta en el PONG (ajustada por ti)
       - BEDLINK_PUBLISH_IP=192.168.0.200
       - BEDLINK_PUBLISH_PORT=19132
-      # Puerto del panel
       - WEB_PORT=8090
-      # Log level: DEBUG|INFO|WARN|ERROR
       - BEDLINK_LOG_LEVEL=DEBUG
-      # --- Modo menú+proxy ---
-      # Selección global por defecto (si no se eligió nada por /select)
       - BEDLINK_DEFAULT_TARGET=minecraft.pensa.ar:19232
-      # Timeout de sesión (s) para limpiar mapeos inactivos
       - BEDLINK_SESSION_TTL=300
     volumes:
       - ./app/servers.json:/app/servers.json:ro
+      - ./app/targets.json:/app/targets.json

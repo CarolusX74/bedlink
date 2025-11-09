@@ -1,7 +1,24 @@
 [
-  { "name": "Mundo Pensa (WAN)", "address": "minecraft.pensa.ar:19232" },
-  { "name": "Mundo Pensa (LAN)", "address": "core.pensa.lan:19232" },
-  { "name": "Papá y Mario (WAN)", "address": "realm.pensa.ar:19233" },
-  { "name": "Papá y Mario (LAN)", "address": "core.pensa.lan:19233" }
-
+  {
+    "name": "Mundo Pensa (WAN)",
+    "address": "minecraft.pensa.ar:19232",
+    "description": "Servidor público para amigos y testers"
+  },
+  {
+    "name": "Mundo Pensa (LAN)",
+    "address": "core.pensa.lan:19232",
+    "description": "Servidor local de desarrollo interno"
+  },
+  {
+    "name": "Papá y Mario (WAN)",
+    "address": "realm.pensa.ar:19233",
+    "description": "Mundo familiar accesible desde internet",
+    "password": "1234"
+  },
+  {
+    "name": "Papá y Mario (LAN)",
+    "address": "core.pensa.lan:19233",
+    "description": "Versión local del mundo familiar",
+    "password": "1234"
+  }
 ]

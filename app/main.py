@@ -25,7 +25,7 @@ RAKNET_MAGIC = bytes.fromhex("00ffff00fefefefefdfdfdfd12345678")
 RAKNET_UNCONNECTED_PING = 0x01
 RAKNET_UNCONNECTED_PONG = 0x1C
 
-app = FastAPI(title="BedLink-Menu v0.4.0")
+app = FastAPI(title="BedLink-Menu v0.5.0")
 
 # =========================
 # Estado
@@ -43,16 +43,25 @@ def log(msg: str, level: str = "INFO"):
         print(f"[{level}] {msg}", flush=True)
 
 # =========================
-# Utilidades
+# Servidores
 # =========================
 def load_servers():
     try:
-        with open(SERVERS_FILE,"r",encoding="utf-8") as f:
+        with open(SERVERS_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
-        log(f"No se pudo leer servers.json: {e}","WARN")
+        log(f"No se pudo leer servers.json: {e}", "WARN")
         return []
 
+def get_server_by_addr(addr: str):
+    for s in load_servers():
+        if s["address"] == addr:
+            return s
+    return None
+
+# =========================
+# Persistencia
+# =========================
 def load_targets():
     global _global_target, _client_target
     if not os.path.exists(TARGETS_FILE): return
@@ -72,6 +81,9 @@ def save_targets():
     except Exception as e:
         log(f"[WARN] No se pudo guardar targets.json: {e}","WARN")
 
+# =========================
+# Utilidades
+# =========================
 def parse_hostport(addr:str)->Tuple[str,int]:
     if ":" in addr:
         h,p = addr.rsplit(":",1)
@@ -96,14 +108,20 @@ def get_publish_ip(remote_addr:Tuple[str,int])->str:
         return "0.0.0.0"
 
 def make_mcep_advertisement(remote_addr):
-    ip=get_publish_ip(remote_addr)
-    return f"MCPE;{MOTD};{BEDROCK_PROTOCOL};{BEDROCK_VERSION};0;20;{ip};{PUBLISH_PORT};"
+    ip = get_publish_ip(remote_addr)
+    client_ip = remote_addr[0]
+    current_target = get_effective_target(client_ip)
+    srv = get_server_by_addr(current_target)
+    motd_extra = f" · {srv['name']}" if srv else ""
+    return f"MCPE;{MOTD}{motd_extra};{BEDROCK_PROTOCOL};{BEDROCK_VERSION};0;20;{ip};{PUBLISH_PORT};"
 
 def build_unconnected_pong(pkt_time,guid,adv):
     b=adv.encode("utf-8")
     return bytes([RAKNET_UNCONNECTED_PONG])+pkt_time+guid+RAKNET_MAGIC+len(b).to_bytes(2,"big")+b
 
-# --- selección
+# =========================
+# Selección de destino
+# =========================
 def get_effective_target(ip:str)->str: return _client_target.get(ip,_global_target)
 def set_global_target(a:str):
     global _global_target
@@ -226,25 +244,46 @@ def clear_for(client_ip:str=Query(...)):
     clear_client_target(client_ip)
     return {"ok":True,"client_ip":client_ip,"cleared":True}
 
+@app.post("/unlock")
+def unlock(name: str = Query(...), password: str = Query(...)):
+    servers = load_servers()
+    for s in servers:
+        if s["name"] == name and "password" in s:
+            if s["password"] == password:
+                return {"ok": True, "address": s["address"]}
+            else:
+                return {"ok": False, "error": "Contraseña incorrecta"}
+    return {"ok": False, "error": "Servidor no encontrado o sin contraseña"}
+
 @app.get("/panel",response_class=HTMLResponse)
 def panel():
     servers=load_servers()
-    buttons="\n".join(f'<button class="server-btn" data-target="{s["address"]}">🌍 {s["name"]}</button>' for s in servers)
+    cards=""
+    for s in servers:
+        name=s["name"]; addr=s["address"]
+        desc=s.get("description","")
+        has_pass="password" in s
+        lock_icon="🔒 " if has_pass else "🌍 "
+        cards+=f'<div class="server-card"><h4>{lock_icon}{name}</h4>'
+        if desc: cards+=f'<p>{desc}</p>'
+        cards+=f'<button class="server-btn" data-target="{addr}" data-name="{name}" data-pass="{str(has_pass).lower()}">Conectar</button></div>'
     html=f"""<!doctype html>
 <html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>BedLink Control Panel v0.4.0</title>
+<title>BedLink Control Panel v0.5.0</title>
 <style>
 body{{background:#0d1117;color:#c9d1d9;font-family:Inter,Segoe UI,Roboto,sans-serif;display:flex;flex-direction:column;align-items:center;padding:20px}}
 h1{{margin:0;font-size:24px;color:#58a6ff;text-align:center}}
 h3{{margin-top:24px;color:#8b949e}}
-.grid{{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));width:100%;max-width:800px}}
-.server-btn{{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:14px 16px;cursor:pointer;font-weight:600;color:#c9d1d9;transition:0.2s}}
+.grid{{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));width:100%;max-width:900px}}
+.server-card{{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:16px;text-align:center}}
+.server-card h4{{margin:0 0 8px 0}}
+.server-card p{{margin:0 0 10px 0;color:#8b949e;font-size:14px}}
+.server-btn{{background:#21262d;border:1px solid #30363d;border-radius:10px;padding:10px 14px;cursor:pointer;font-weight:600;color:#c9d1d9;transition:0.2s}}
 .server-btn:hover{{border-color:#58a6ff;background:#1c232d;transform:translateY(-2px)}}
-.server-btn.active{{outline:2px solid #58a6ff;box-shadow:0 0 10px #58a6ff33}}
 .badges{{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:10px 0}}
 .badge{{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:5px 10px;font-size:13px}}
 .badge.ip{{color:#3fb950;border-color:#238636}}
-pre{{background:#0d1117;border:1px solid #30363d;padding:8px;border-radius:8px;font-size:12px;width:90%;max-width:800px;overflow:auto}}
+pre{{background:#0d1117;border:1px solid #30363d;padding:8px;border-radius:8px;font-size:12px;width:90%;max-width:900px;overflow:auto}}
 .footer{{margin-top:24px;color:#8b949e;font-size:12px;text-align:center}}
 </style></head>
 <body>
@@ -254,18 +293,19 @@ pre{{background:#0d1117;border:1px solid #30363d;padding:8px;border-radius:8px;f
   <div id="myip" class="badge">Detectando IP…</div>
 </div>
 <h3>Servidores disponibles</h3>
-<div class="grid">{buttons}</div>
+<div class="grid">{cards}</div>
 <h3>Sesiones activas</h3><pre id="sessions">Sin sesiones</pre>
-<div class="footer">BedLink-Menu v0.4.0 · Carlos-Certified™</div>
+<div class="footer">BedLink-Menu v0.5.0 · Carlos-Certified™</div>
 <script>
 async function api(p,o){{return fetch(p,o).then(r=>r.json())}}
 async function refresh(){{let s=await api('/status');document.getElementById('current').textContent='Target actual: '+s.global_target;
  let pre=document.getElementById('sessions');pre.textContent=s.sessions.length?JSON.stringify(s.sessions,null,2):'Sin sesiones';
  document.querySelectorAll('.server-btn').forEach(b=>b.classList.toggle('active',b.dataset.target===s.global_target));}}
 async function detectIP(){{let r=await api('/whoami');let el=document.getElementById('myip');el.textContent='Tu IP: '+r.ip;el.classList.add('ip');window.myip=r.ip;}}
-async function selectTarget(t){{await api('/select?target='+encodeURIComponent(t),{{method:'POST'}});refresh()}}
-async function selectForMe(t){{if(!window.myip)return alert('IP no detectada');await api(`/select_for?client_ip=${{window.myip}}&target=${{t}}`,{{method:'POST'}});refresh()}}
-document.querySelectorAll('.server-btn').forEach(b=>{{b.addEventListener('click',e=>{{e.shiftKey?selectForMe(b.dataset.target):selectTarget(b.dataset.target)}});b.title='Click: Global · Shift+Click: Solo este dispositivo';}});
+async function selectTarget(t,name,passReq){{if(passReq==='true'){{let p=prompt(`Contraseña para ${{name}}:`);if(!p)return;let r=await api(`/unlock?name=${{encodeURIComponent(name)}}&password=${{encodeURIComponent(p)}}`,{{method:'POST'}});if(!r.ok)return alert(r.error);t=r.address;}}await api('/select?target='+encodeURIComponent(t),{{method:'POST'}});refresh();}}
+async function selectForMe(t){{if(!window.myip)return alert('IP no detectada');await api(`/select_for?client_ip=${{window.myip}}&target=${{t}}`,{{method:'POST'}});refresh();}}
+document.querySelectorAll('.server-btn').forEach(b=>{{b.addEventListener('click',e=>{{let t=b.dataset.target;let name=b.dataset.name;let passReq=b.dataset.pass;
+ e.shiftKey?selectForMe(t):selectTarget(t,name,passReq);}});b.title='Click: Global · Shift+Click: Solo este dispositivo';}});
 refresh();detectIP();setInterval(refresh,2000);
 </script></body></html>"""
     return HTMLResponse(html)
@@ -284,6 +324,6 @@ async def main_async():
     await asyncio.gather(udp,http)
 
 if __name__=="__main__":
-    log("Iniciando BedLink-Menu v0.4.0 (persistencia + proxy UDP)…","INFO")
+    log("Iniciando BedLink-Menu v0.5.0 (proxy + panel + contraseñas)…","INFO")
     try: asyncio.run(main_async())
     except KeyboardInterrupt: log("Saliendo por Ctrl+C","INFO")
