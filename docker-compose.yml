@@ -1,22 +1,43 @@
+# ==========================================================
+# 🧱 BedLink - docker-compose.yml (v0.5.1-stable)
+# ----------------------------------------------------------
+# Proxy dinámico + Panel web + Selector de mundos
+# Compatible con LAN o túneles Cloudflare.
+# ==========================================================
+
 services:
   bedlink:
     container_name: bedlink
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     restart: unless-stopped
+
+    # Puertos expuestos (UDP juego + HTTP panel)
     ports:
       - "19132:19132/udp"
       - "8090:8090/tcp"
+
+    # Variables de entorno (configurable desde .env)
     environment:
-      - BEDLINK_MOTD=BedLink 🌍 PensaRealms
-      - BEDROCK_VERSION=1.21.50
-      - BEDROCK_PROTOCOL=475
-      - BEDLINK_PUBLISH_IP=192.168.0.200
-      - BEDLINK_PUBLISH_PORT=19132
-      - WEB_PORT=8090
-      - BEDLINK_LOG_LEVEL=DEBUG
-      - BEDLINK_DEFAULT_TARGET=core.pensa.lan:19232
-      - BEDLINK_SESSION_TTL=300
+      BEDLINK_MOTD: "BedLink 🌍 PensaRealms"
+      BEDROCK_VERSION: "1.21.50"
+      BEDROCK_PROTOCOL: "475"
+      BEDLINK_PUBLISH_IP: "192.168.0.200"   # IP LAN del host (ajustable)
+      BEDLINK_PUBLISH_PORT: "19132"
+      WEB_PORT: "8090"
+      BEDLINK_LOG_LEVEL: "INFO"             # DEBUG/INFO/WARN/ERROR
+      BEDLINK_DEFAULT_TARGET: "core.pensa.lan:19232"
+      BEDLINK_SESSION_TTL: "300"
+
+    # Persistencia local (mantiene configuraciones y sesiones)
     volumes:
       - ./app/servers.json:/app/servers.json:ro
       - ./app/targets.json:/app/targets.json
       - ./app/player_sessions.json:/app/player_sessions.json
+
+    # Etiquetas opcionales para controladores externos o Portainer
+    labels:
+      com.pensa.project: "BedLink"
+      com.pensa.version: "0.5.1-stable"
+      com.pensa.maintainer: "Carlos Pensa <carlos@pensa.ar>"

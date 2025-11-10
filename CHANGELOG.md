@@ -1,5 +1,51 @@
 # 🧱 Bedlink – Changelog
 
+## v0.5.1 – Reactive FastUDP (Stable)
+
+**Fecha:** 2025-11-10
+**Autor:** Carlos Pensa (@CarolusX74)
+
+### ✨ Mejoras principales
+
+* Proxy UDP optimizado con relay asíncrono **sin lag perceptible**.
+* Eliminado el error `Destination address required` al conectar nuevos clientes.
+* Estabilidad mejorada con control de sesiones inactivas (`SESSION_TTL`).
+* Panel `/panel` funcional y compatible con FastAPI 0.115+.
+* Código base simplificado y ajustado para **rendimiento + claridad**.
+* Entrypoint actualizado (`v0.5.1-stable`) con detección automática de archivos.
+* Dockerfile más limpio y portable (Python 3.12-slim + pip actualizado).
+* Compatibilidad con Docker Compose LAN o túnel Cloudflare.
+
+### 🐛 Fixes
+
+* Corregido error `NameError: set_global_target no definido` al seleccionar un servidor.
+* Corregido `player_sessions.json: Is a directory` en el entrypoint.
+* Eliminados locks innecesarios en envío UDP que generaban micro-lag.
+
+### 🧹 Estructura final
+
+```
+Dockerfile  
+docker-compose.yml  
+entrypoint.sh  
+CHANGELOG.md  
+app/
+ ├─ main.py  
+ ├─ servers.json  
+ ├─ targets.json  
+ └─ player_sessions.json  
+```
+
+---
+
+## v0.5.0 – Base Reactive UDP
+
+* Implementación inicial del motor asincrónico con FastAPI.
+* Proxy UDP funcional y panel básico.
+* Persistencia de `targets.json` y `servers.json`.
+* Reducción de overhead de sockets respecto a v0.4.x.
+
+
 ## v0.6.4 – Refinamiento Pre-Release
 
 **Fecha:** 2025-11-10
