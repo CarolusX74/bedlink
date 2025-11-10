@@ -18,7 +18,6 @@
   {
     "name": "Papá y Mario (LAN)",
     "address": "core.pensa.lan:19233",
-    "description": "Versión local del mundo familiar",
-    "password": "1234"
+    "description": "Versión local del mundo familiar"
   }
 ]
