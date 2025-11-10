@@ -5,7 +5,6 @@ services:
     restart: unless-stopped
     ports:
       - "19132:19132/udp"
-      - "19132:19132/tcp"
       - "8090:8090/tcp"
     environment:
       - BEDLINK_MOTD=BedLink 🌍 PensaRealms
@@ -15,8 +14,9 @@ services:
       - BEDLINK_PUBLISH_PORT=19132
       - WEB_PORT=8090
       - BEDLINK_LOG_LEVEL=DEBUG
-      - BEDLINK_DEFAULT_TARGET=minecraft.pensa.ar:19232
+      - BEDLINK_DEFAULT_TARGET=core.pensa.lan:19232
       - BEDLINK_SESSION_TTL=300
     volumes:
       - ./app/servers.json:/app/servers.json:ro
       - ./app/targets.json:/app/targets.json
+      - ./app/player_sessions.json:/app/player_sessions.json

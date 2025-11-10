@@ -1,18 +1,20 @@
-# 🧱 Bedlink – Changelog
+# 🧱 BedLink – Changelog
 
-## v1.0.0 – Primer Release Público
-**Fecha:** 2025-11-09
+## v0.6.3 – Autonomous Image Release
+**Date:** 2025-11-09  
 
-### ✨ Novedades
-- Implementación base de servidor **BedrockConnect alternativo** compatible con Minecraft Bedrock.
-- Soporte para **autenticación con contraseña** (panel `/` protegido).
-- Panel de administración simple en `http://IP:8090` para gestionar servidores.
-- Persistencia de configuración en `servers.json`.
-- Respuestas `PONG` y manejo básico de **heartbeats UDP**.
-- Dockerfile y `docker-compose.yml` para despliegue rápido.
-- Imagen pública en Docker Hub:  
-  [`carolusx74/bedlink:latest`](https://hub.docker.com/r/carolusx74/bedlink)
+### ✨ New
+- Added **`entrypoint.sh`** with auto-initialization of `servers.json`, `targets.json`, and `player_sessions.json`.
+- Docker image now runs standalone — ready for `docker run` or `compose up` without setup.
+- Improved logging and startup messages (PensaInfra style).
+- Clean separation between **FastAPI panel** and **UDP proxy**.
 
-### 🐛 Fixes
-- Corrección de permisos y rutas en `/app`.
-- Manejador robusto de `targets.json` para evitar errores cuando la ruta apunta a un directorio.
+### 🧩 Technical
+- Updated `Dockerfile` to use `ENTRYPOINT` → `/app/entrypoint.sh`.
+- Optimized Docker image (base: python 3.12-slim < 150 MB).
+- Fixed warnings when `/app/targets.json` was a directory.
+- Unified JSON persistency handling for sessions and targets.
+
+### 🧠 Next
+- In-game menu integration (`/menu_manager.py v0.6.1` foundation).
+- Docker Hub build pipeline and auto-publish workflow.

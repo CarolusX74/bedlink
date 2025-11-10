@@ -5,6 +5,10 @@ from fastapi import FastAPI, Request, Query
 from fastapi.responses import JSONResponse, HTMLResponse
 import uvicorn
 
+# --- Ajuste importante: importar archivos locales ---
+import menu_manager
+import udp_selector
+
 # =========================
 # Config
 # =========================
@@ -16,7 +20,7 @@ PUBLISH_PORT = int(os.getenv("BEDLINK_PUBLISH_PORT", "19132"))
 WEB_PORT = int(os.getenv("WEB_PORT", "8090"))
 LOG_LEVEL = os.getenv("BEDLINK_LOG_LEVEL", "INFO").upper()
 SESSION_TTL = int(os.getenv("BEDLINK_SESSION_TTL", "300"))
-DEFAULT_TARGET = os.getenv("BEDLINK_DEFAULT_TARGET", "minecraft.pensa.ar:19232")
+DEFAULT_TARGET = os.getenv("BEDLINK_DEFAULT_TARGET", "")
 SERVERS_FILE = "/app/servers.json"
 TARGETS_FILE = "/app/targets.json"
 
@@ -107,13 +111,20 @@ def get_publish_ip(remote_addr:Tuple[str,int])->str:
     except Exception:
         return "0.0.0.0"
 
+# =========================
+# Integración con menú dinámico
+# =========================
+
 def make_mcep_advertisement(remote_addr):
     ip = get_publish_ip(remote_addr)
     client_ip = remote_addr[0]
-    current_target = get_effective_target(client_ip)
-    srv = get_server_by_addr(current_target)
-    motd_extra = f" · {srv['name']}" if srv else ""
-    return f"MCPE;{MOTD}{motd_extra};{BEDROCK_PROTOCOL};{BEDROCK_VERSION};0;20;{ip};{PUBLISH_PORT};"
+
+    # --- MOTD dinámico desde menu_manager ---
+    motd_text = menu_manager.build_menu_motd(client_ip)
+
+    # --- Mantener compatibilidad con protocolo ---
+    return f"MCPE;{motd_text};{BEDROCK_PROTOCOL};{BEDROCK_VERSION};0;20;{ip};{PUBLISH_PORT};"
+
 
 def build_unconnected_pong(pkt_time,guid,adv):
     b=adv.encode("utf-8")
@@ -122,7 +133,9 @@ def build_unconnected_pong(pkt_time,guid,adv):
 # =========================
 # Selección de destino
 # =========================
-def get_effective_target(ip:str)->str: return _client_target.get(ip,_global_target)
+def get_effective_target(ip: str) -> str:
+    return _client_target.get(ip, _global_target or "")
+
 def set_global_target(a:str):
     global _global_target
     _global_target=a
@@ -171,30 +184,60 @@ class BedrockUDP(asyncio.DatagramProtocol):
     def __init__(self,loop):
         self.loop=loop; self.transport=None; self.guid=(987654321).to_bytes(8,"big")
     def connection_made(self,t): self.transport=t; log(f"UDP escuchando en {t.get_extra_info('socket').getsockname()}","INFO")
-    def datagram_received(self,data,addr):
+    def datagram_received(self, data, addr):
         try:
-            if not data: return
-            pid=data[0]
-            if pid==RAKNET_UNCONNECTED_PING and len(data)>=25 and data[9:25]==RAKNET_MAGIC:
-                pong=build_unconnected_pong(data[1:9],self.guid,make_mcep_advertisement(addr))
-                self.transport.sendto(pong,addr)
-                log(f"PONG a {addr}","DEBUG"); return
-            client_ip=addr[0]; target=get_effective_target(client_ip)
-            th,tp=parse_hostport(target)
-            try:
-                resolved_ip=resolve_host(th)
-            except Exception as e:
-                log(f"[DNS] No se pudo resolver {th}: {e}","WARN")
+            pid = data[0]
+
+            # --- PING INICIAL: responder con menú dinámico ---
+            if pid == RAKNET_UNCONNECTED_PING and len(data) >= 25 and data[9:25] == RAKNET_MAGIC:
+                motd_text = menu_manager.build_menu_motd(addr[0])
+                pong = build_unconnected_pong(
+                    data[1:9],
+                    self.guid,
+                    f"MCPE;{motd_text};{BEDROCK_PROTOCOL};{BEDROCK_VERSION};0;20;{get_publish_ip(addr)};{PUBLISH_PORT};"
+                )
+                self.transport.sendto(pong, addr)
+                log(f"[MENU] MOTD enviado a {addr} ({motd_text})", "DEBUG")
                 return
-            taddr=(resolved_ip,tp)
-            sess=_sessions.get(addr)
+
+            # --- SI NO HAY TARGET SELECCIONADO: ignorar handshake ---
+            client_ip = addr[0]
+            target = get_effective_target(client_ip)
+
+            if not target:
+                # Responder con MOTD también para cualquier otro paquete inicial
+                # así Bedrock no muestra error sino "Cargando servidor..."
+                if pid in (0x00, 0x09, 0x10):
+                    motd_text = menu_manager.build_menu_motd(client_ip)
+                    pong = build_unconnected_pong(
+                        data[1:9],
+                        self.guid,
+                        f"MCPE;{motd_text};{BEDROCK_PROTOCOL};{BEDROCK_VERSION};0;20;{get_publish_ip(addr)};{PUBLISH_PORT};"
+                    )
+                    self.transport.sendto(pong, addr)
+                    log(f"[WAIT] {client_ip} sin selección → PONG menú reenviado", "DEBUG")
+                else:
+                    log(f"[WAIT] {client_ip} aún no seleccionó mundo → ignorando paquete tipo {hex(pid)}", "DEBUG")
+                return
+
+            # --- Conexión normal: reenviar a servidor real ---
+            th, tp = parse_hostport(target)
+            resolved_ip = resolve_host(th)
+            taddr = (resolved_ip, tp)
+            sess = _sessions.get(addr)
             if not sess:
-                sess=UpstreamSession(self.loop,addr,taddr,self.transport)
-                _sessions[addr]=sess
-                log(f"[SESSION] Nueva sesión {addr}->{taddr}","INFO")
-            sess.touch(); sess.up_sock.connect(taddr)
+                sess = UpstreamSession(self.loop, addr, taddr, self.transport)
+                _sessions[addr] = sess
+                log(f"[SESSION] Nueva sesión {addr}->{taddr}", "INFO")
+
+            sess.touch()
+            sess.up_sock.connect(taddr)
             self.loop.create_task(sess.send(data))
-        except Exception as e: log(f"Datagram err {addr}: {e}","WARN")
+
+        except Exception as e:
+            log(f"Datagram err {addr}: {e}", "WARN")
+
+
 
 async def run_udp_server():
     loop=asyncio.get_running_loop()
